@@ -387,10 +387,10 @@ run_game_flow() {
     take_screenshot "after_guest_click"
     
     # ============================================
-    # STEP 4: Wait 4 seconds and take screenshot
+    # STEP 4: Wait 9 seconds and take screenshot
     # ============================================
-    log_info "Waiting 4 seconds..."
-    sleep 4
+    log_info "Waiting 9 seconds..."
+    sleep 9
     take_screenshot "game_main_screen"
     
     # ============================================
