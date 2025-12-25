@@ -24,6 +24,14 @@ CHECK_PIXEL_Y=220
 # When popups are done, this pixel is yellowish RGB(255, 255, 213) - G > 200
 # When popup is present, the pixel is different (usually reddish, G < 100)
 
+# Constant reference colors for button detection (captured from main screen)
+# Check 1: (1044, 587)
+REFERENCE_COLOR_1="255,255,247"
+# Check 2: (1044, 783)
+REFERENCE_COLOR_2="255,255,245"
+# Check 3: (1044, 968)
+REFERENCE_COLOR_3="255,253,235"
+
 # Maximum popups to try (safety limit)
 MAX_POPUPS=15
 
@@ -347,13 +355,6 @@ run_game_flow() {
     done
     
     # ============================================
-    # SAVE REFERENCE COLOR from main screen at (1021, 680)
-    # ============================================
-    log_info "Saving reference color at (1021, 680)..."
-    REFERENCE_COLOR=$(get_pixel_color 1021 680)
-    log_info "Reference color saved: RGB($REFERENCE_COLOR)"
-    
-    # ============================================
     # STEP 6: Click at (710, 200)
     # ============================================
     echo ""
@@ -395,21 +396,23 @@ run_game_flow() {
     
     log_info "Clicking at (70, 180)..."
     tap_screen 70 180 "Button"
-    sleep 1
+    
+    # Wait 2 seconds before checking color
+    sleep 2
     
     # ============================================
-    # STEP 11: Check color at (1021, 680) and click if matches
+    # STEP 11: Check color at (1044, 587) and click if matches
     # ============================================
     echo ""
-    log_info "Checking color at (1021, 680)..."
-    local current_color=$(get_pixel_color 1021 680)
-    log_info "Current color: RGB($current_color) vs Reference: RGB($REFERENCE_COLOR)"
+    log_info "Checking color at (1044, 587)..."
+    local current_color=$(get_pixel_color 1044 587)
+    log_info "Current color: RGB($current_color) vs Reference: RGB($REFERENCE_COLOR_1)"
     
-    if compare_colors "$current_color" "$REFERENCE_COLOR"; then
-        log_success "Color matches! Clicking at (1021, 680)..."
-        tap_screen 1021 680 "Matched button"
+    if compare_colors "$current_color" "$REFERENCE_COLOR_1"; then
+        log_success "Color matches! Clicking at (1044, 587)..."
+        tap_screen 1044 587 "Matched button"
         sleep 3
-        take_screenshot "after_1021_680_click"
+        take_screenshot "after_1044_587_click"
         
         log_info "Clicking at (120, 2250)..."
         tap_screen 120 2250 "Button"
@@ -419,18 +422,18 @@ run_game_flow() {
     fi
     
     # ============================================
-    # STEP 12: Check color at (1120, 860) and click if matches
+    # STEP 12: Check color at (1044, 783) and click if matches
     # ============================================
     echo ""
-    log_info "Checking color at (1120, 860)..."
-    current_color=$(get_pixel_color 1120 860)
-    log_info "Current color: RGB($current_color) vs Reference: RGB($REFERENCE_COLOR)"
+    log_info "Checking color at (1044, 783)..."
+    current_color=$(get_pixel_color 1044 783)
+    log_info "Current color: RGB($current_color) vs Reference: RGB($REFERENCE_COLOR_2)"
     
-    if compare_colors "$current_color" "$REFERENCE_COLOR"; then
-        log_success "Color matches! Clicking at (1120, 860)..."
-        tap_screen 1120 860 "Matched button"
+    if compare_colors "$current_color" "$REFERENCE_COLOR_2"; then
+        log_success "Color matches! Clicking at (1044, 783)..."
+        tap_screen 1044 783 "Matched button"
         sleep 6
-        take_screenshot "after_1120_860_click"
+        take_screenshot "after_1044_783_click"
         
         log_info "Clicking at (120, 2250)..."
         tap_screen 120 2250 "Button"
@@ -439,19 +442,19 @@ run_game_flow() {
     fi
     
     # ============================================
-    # STEP 13: Wait 2s, check color at (1020, 1060) and click if matches
+    # STEP 13: Wait 2s, check color at (1044, 968) and click if matches
     # ============================================
     echo ""
     sleep 2
-    log_info "Checking color at (1020, 1060)..."
-    current_color=$(get_pixel_color 1020 1060)
-    log_info "Current color: RGB($current_color) vs Reference: RGB($REFERENCE_COLOR)"
+    log_info "Checking color at (1044, 968)..."
+    current_color=$(get_pixel_color 1044 968)
+    log_info "Current color: RGB($current_color) vs Reference: RGB($REFERENCE_COLOR_3)"
     
-    if compare_colors "$current_color" "$REFERENCE_COLOR"; then
-        log_success "Color matches! Clicking at (1020, 1060)..."
-        tap_screen 1020 1060 "Matched button"
+    if compare_colors "$current_color" "$REFERENCE_COLOR_3"; then
+        log_success "Color matches! Clicking at (1044, 968)..."
+        tap_screen 1044 968 "Matched button"
         sleep 1
-        take_screenshot "after_1020_1060_click"
+        take_screenshot "after_1044_968_click"
         
         log_info "Clicking at (120, 2250)..."
         tap_screen 120 2250 "Button"
