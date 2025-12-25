@@ -462,6 +462,18 @@ run_game_flow() {
         log_warning "Color does not match, skipping click"
     fi
     
+    # ============================================
+    # STEP 14: Click at (530, 400), wait, screenshot, then close popup
+    # ============================================
+    echo ""
+    log_info "Clicking at (530, 400)..."
+    tap_screen 530 400 "Button"
+    sleep 1
+    take_screenshot "after_530_400_click"
+    
+    log_info "Clicking popup X button at ($POPUP_X_BUTTON_X, $POPUP_X_BUTTON_Y)..."
+    tap_screen $POPUP_X_BUTTON_X $POPUP_X_BUTTON_Y "Popup X button"
+    
     echo ""
     echo "=========================================="
     log_success "Game flow automation complete!"
