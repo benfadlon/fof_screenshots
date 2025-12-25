@@ -2,6 +2,7 @@
 
 # Fish of Fortune - Game Flow Automation Script
 # This script performs specific actions in the game and takes screenshots
+# Auto-detects when popups are finished by checking pixel color!
 
 # Configuration
 DEVICE_IP="10.10.0.114:5555"
@@ -9,16 +10,22 @@ PACKAGE_NAME="com.whalo.games.fishoffortune"
 SCREENSHOT_DIR="/Users/user/Desktop/fof_screenshots"
 
 # Screen resolution: 1080x2392
-# Button coordinates (adjust these if clicks don't land correctly)
+# Button coordinates
 GUEST_BUTTON_X=540      # Center X
 GUEST_BUTTON_Y=2160     # Y position for Guest button
 
-# X button coordinates for popups (top-right corner)
-POPUP_X_BUTTON_X=1051   # Right side
-POPUP_X_BUTTON_Y=645    # Upper area
+# X button coordinates for popups
+POPUP_X_BUTTON_X=1066   # Right side
+POPUP_X_BUTTON_Y=475    # Upper area
 
-# How many popups to close
-MAX_POPUPS=5
+# Pixel to check for popup detection
+CHECK_PIXEL_X=965
+CHECK_PIXEL_Y=220
+# When popups are done, this pixel is yellowish RGB(255, 255, 213) - G > 200
+# When popup is present, the pixel is different (usually reddish, G < 100)
+
+# Maximum popups to try (safety limit)
+MAX_POPUPS=15
 
 # Colors for output
 RED='\033[0;31m'
@@ -52,6 +59,120 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Function to check if popups are finished by checking pixel color
+# Returns 0 if popups are done, 1 if popup still present
+check_popups_done() {
+    local temp_file="/sdcard/pixel_check.png"
+    local local_file="/tmp/pixel_check.png"
+    
+    # Take screenshot
+    adb -s "$DEVICE_IP" shell screencap -p "$temp_file" 2>/dev/null
+    adb -s "$DEVICE_IP" pull "$temp_file" "$local_file" 2>/dev/null
+    adb -s "$DEVICE_IP" shell rm "$temp_file" 2>/dev/null
+    
+    # Extract pixel color and check if popups are done
+    local result=$(python3 << EOF
+import subprocess
+
+x = $CHECK_PIXEL_X
+y = $CHECK_PIXEL_Y
+local_file = "/tmp/pixel_check.png"
+
+# Extract the pixel using sips
+subprocess.run(f'sips -c 1 1 --cropOffset {y} {x} "{local_file}" -s format bmp -o /tmp/pixel.bmp 2>/dev/null', shell=True, capture_output=True)
+
+try:
+    with open('/tmp/pixel.bmp', 'rb') as f:
+        data = f.read()
+        b, g, r = data[-3], data[-2], data[-1]
+        
+        # Check if popups are done: yellowish color means G > 200
+        if g > 200:
+            print(f"DONE:RGB({r},{g},{b})")
+        else:
+            print(f"POPUP:RGB({r},{g},{b})")
+except Exception as e:
+    print(f"ERROR:{e}")
+EOF
+)
+    
+    # Parse the result
+    local status=$(echo "$result" | cut -d':' -f1)
+    local color=$(echo "$result" | cut -d':' -f2)
+    
+    log_info "Pixel color at ($CHECK_PIXEL_X, $CHECK_PIXEL_Y): $color (status: $status)"
+    
+    if [ "$status" = "DONE" ]; then
+        return 0  # Popups done
+    else
+        return 1  # Popup still present
+    fi
+}
+
+# Function to get pixel color at specific coordinates
+# Returns: "R,G,B" format
+get_pixel_color() {
+    local x=$1
+    local y=$2
+    local temp_file="/sdcard/pixel_check.png"
+    local local_file="/tmp/pixel_check.png"
+    
+    # Take screenshot
+    adb -s "$DEVICE_IP" shell screencap -p "$temp_file" 2>/dev/null
+    adb -s "$DEVICE_IP" pull "$temp_file" "$local_file" 2>/dev/null
+    adb -s "$DEVICE_IP" shell rm "$temp_file" 2>/dev/null
+    
+    # Extract pixel color
+    python3 << EOF
+import subprocess
+
+x = $x
+y = $y
+local_file = "/tmp/pixel_check.png"
+
+subprocess.run(f'sips -c 1 1 --cropOffset {y} {x} "{local_file}" -s format bmp -o /tmp/pixel.bmp 2>/dev/null', shell=True, capture_output=True)
+
+try:
+    with open('/tmp/pixel.bmp', 'rb') as f:
+        data = f.read()
+        b, g, r = data[-3], data[-2], data[-1]
+        print(f"{r},{g},{b}")
+except:
+    print("0,0,0")
+EOF
+}
+
+# Function to compare two colors (with tolerance)
+# Returns 0 if colors match, 1 if different
+compare_colors() {
+    local color1="$1"
+    local color2="$2"
+    local tolerance=30  # Allow some variation
+    
+    local r1=$(echo "$color1" | cut -d',' -f1)
+    local g1=$(echo "$color1" | cut -d',' -f2)
+    local b1=$(echo "$color1" | cut -d',' -f3)
+    
+    local r2=$(echo "$color2" | cut -d',' -f1)
+    local g2=$(echo "$color2" | cut -d',' -f2)
+    local b2=$(echo "$color2" | cut -d',' -f3)
+    
+    local diff_r=$((r1 - r2))
+    local diff_g=$((g1 - g2))
+    local diff_b=$((b1 - b2))
+    
+    # Absolute values
+    [ $diff_r -lt 0 ] && diff_r=$((diff_r * -1))
+    [ $diff_g -lt 0 ] && diff_g=$((diff_g * -1))
+    [ $diff_b -lt 0 ] && diff_b=$((diff_b * -1))
+    
+    if [ $diff_r -le $tolerance ] && [ $diff_g -le $tolerance ] && [ $diff_b -le $tolerance ]; then
+        return 0  # Colors match
+    else
+        return 1  # Colors different
+    fi
+}
+
 # Function to take a screenshot with a descriptive name
 take_screenshot() {
     local description="$1"
@@ -62,15 +183,12 @@ take_screenshot() {
     
     log_info "Taking screenshot #$screenshot_num: $description"
     
-    # Take screenshot on device
     adb -s "$DEVICE_IP" shell screencap -p "$device_path"
     
     if [ $? -eq 0 ]; then
-        # Pull screenshot to computer
         adb -s "$DEVICE_IP" pull "$device_path" "$local_path" 2>/dev/null
         
         if [ $? -eq 0 ]; then
-            # Clean up device screenshot
             adb -s "$DEVICE_IP" shell rm "$device_path"
             log_success "Screenshot saved: $filename"
             ((screenshot_num++))
@@ -148,6 +266,7 @@ run_game_flow() {
     echo ""
     echo "=========================================="
     echo "  Fish of Fortune - Game Flow Automation "
+    echo "     (Auto-detects popup completion!)    "
     echo "=========================================="
     echo ""
     
@@ -195,9 +314,12 @@ run_game_flow() {
     take_screenshot "game_main_screen"
     
     # ============================================
-    # STEP 5: Close popups by clicking X
+    # STEP 5: Close popups (auto-detect when done)
     # ============================================
-    log_info "Looking for popups to close..."
+    log_info "Closing popups (will auto-detect when finished)..."
+    echo ""
+    
+    local popups_closed=0
     
     for ((i=1; i<=$MAX_POPUPS; i++)); do
         log_info "Attempting to close popup #$i..."
@@ -205,28 +327,145 @@ run_game_flow() {
         # Click X button
         tap_screen $POPUP_X_BUTTON_X $POPUP_X_BUTTON_Y "Popup X button"
         
-        # Wait 1 second for popup to close
-        log_info "Waiting 1 second..."
+        # Wait for popup to close
         sleep 1
         
         # Take screenshot
         take_screenshot "after_popup_${i}_closed"
+        
+        # Check if popups are done
+        if check_popups_done; then
+            log_success "🎉 All popups closed! Detected yellowish pixel at ($CHECK_PIXEL_X, $CHECK_PIXEL_Y)"
+            popups_closed=$i
+            break
+        else
+            log_info "Popup still detected, continuing..."
+            ((popups_closed++))
+        fi
+        
+        echo ""
     done
+    
+    # ============================================
+    # SAVE REFERENCE COLOR from main screen at (1021, 680)
+    # ============================================
+    log_info "Saving reference color at (1021, 680)..."
+    REFERENCE_COLOR=$(get_pixel_color 1021 680)
+    log_info "Reference color saved: RGB($REFERENCE_COLOR)"
+    
+    # ============================================
+    # STEP 6: Click at (710, 200)
+    # ============================================
+    echo ""
+    log_info "Clicking at (710, 200)..."
+    tap_screen 710 200 "Menu button"
+    sleep 1
+    
+    # ============================================
+    # STEP 7: Scroll down 1500 pixels
+    # ============================================
+    log_info "Scrolling down (1500 pixels)..."
+    adb -s "$DEVICE_IP" shell input swipe 540 1000 540 2500 300
+    sleep 1
+    take_screenshot "after_scroll_down"
+    
+    # ============================================
+    # STEP 8: Scroll up 1806 pixels
+    # ============================================
+    log_info "Scrolling up (1806 pixels)..."
+    adb -s "$DEVICE_IP" shell input swipe 540 2000 540 194 300
+    sleep 1
+    take_screenshot "after_scroll_up"
+    
+    # ============================================
+    # STEP 9: Click at (535, 2277)
+    # ============================================
+    log_info "Clicking button at (535, 2277)..."
+    tap_screen 535 2277 "Button"
+    sleep 1
+    
+    # ============================================
+    # STEP 10: Click at (990, 400), wait 3s, screenshot, click (70, 180)
+    # ============================================
+    echo ""
+    log_info "Clicking at (990, 400)..."
+    tap_screen 990 400 "Button"
+    sleep 3
+    take_screenshot "after_990_400_click"
+    
+    log_info "Clicking at (70, 180)..."
+    tap_screen 70 180 "Button"
+    sleep 1
+    
+    # ============================================
+    # STEP 11: Check color at (1021, 680) and click if matches
+    # ============================================
+    echo ""
+    log_info "Checking color at (1021, 680)..."
+    local current_color=$(get_pixel_color 1021 680)
+    log_info "Current color: RGB($current_color) vs Reference: RGB($REFERENCE_COLOR)"
+    
+    if compare_colors "$current_color" "$REFERENCE_COLOR"; then
+        log_success "Color matches! Clicking at (1021, 680)..."
+        tap_screen 1021 680 "Matched button"
+        sleep 3
+        take_screenshot "after_1021_680_click"
+        
+        log_info "Clicking at (120, 2250)..."
+        tap_screen 120 2250 "Button"
+        sleep 3
+    else
+        log_warning "Color does not match, skipping click"
+    fi
+    
+    # ============================================
+    # STEP 12: Check color at (1120, 860) and click if matches
+    # ============================================
+    echo ""
+    log_info "Checking color at (1120, 860)..."
+    current_color=$(get_pixel_color 1120 860)
+    log_info "Current color: RGB($current_color) vs Reference: RGB($REFERENCE_COLOR)"
+    
+    if compare_colors "$current_color" "$REFERENCE_COLOR"; then
+        log_success "Color matches! Clicking at (1120, 860)..."
+        tap_screen 1120 860 "Matched button"
+        sleep 6
+        take_screenshot "after_1120_860_click"
+        
+        log_info "Clicking at (120, 2250)..."
+        tap_screen 120 2250 "Button"
+    else
+        log_warning "Color does not match, skipping click"
+    fi
+    
+    # ============================================
+    # STEP 13: Wait 2s, check color at (1020, 1060) and click if matches
+    # ============================================
+    echo ""
+    sleep 2
+    log_info "Checking color at (1020, 1060)..."
+    current_color=$(get_pixel_color 1020 1060)
+    log_info "Current color: RGB($current_color) vs Reference: RGB($REFERENCE_COLOR)"
+    
+    if compare_colors "$current_color" "$REFERENCE_COLOR"; then
+        log_success "Color matches! Clicking at (1020, 1060)..."
+        tap_screen 1020 1060 "Matched button"
+        sleep 1
+        take_screenshot "after_1020_1060_click"
+        
+        log_info "Clicking at (120, 2250)..."
+        tap_screen 120 2250 "Button"
+    else
+        log_warning "Color does not match, skipping click"
+    fi
     
     echo ""
     echo "=========================================="
     log_success "Game flow automation complete!"
+    log_info "Popups closed: $popups_closed"
     log_info "Total screenshots taken: $((screenshot_num - 1))"
     log_info "Screenshots saved to: $SCREENSHOT_DIR"
     echo "=========================================="
-    echo ""
-    log_warning "NOTE: If buttons weren't clicked correctly, you may need to"
-    log_warning "adjust the coordinates in this script. Edit these values:"
-    echo "  GUEST_BUTTON_X=$GUEST_BUTTON_X"
-    echo "  GUEST_BUTTON_Y=$GUEST_BUTTON_Y"
-    echo "  POPUP_X_BUTTON_X=$POPUP_X_BUTTON_X"
-    echo "  POPUP_X_BUTTON_Y=$POPUP_X_BUTTON_Y"
-    echo ""
 }
 
 # Run the automation

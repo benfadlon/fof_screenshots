@@ -1,0 +1,9 @@
+# Ignore screenshots (large files)
+*.png
+
+# Ignore temporary files
+*.tmp
+.DS_Store
+
+# Ignore UI dump
+ui_dump.xml
