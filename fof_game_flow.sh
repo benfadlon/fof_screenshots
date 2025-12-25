@@ -9,6 +9,10 @@ DEVICE_IP="10.10.0.114:5555"
 PACKAGE_NAME="com.whalo.games.fishoffortune"
 SCREENSHOT_DIR="/Users/user/Desktop/fof_screenshots"
 
+# Slack Configuration (set SLACK_BOT_TOKEN environment variable)
+SLACK_BOT_TOKEN="${SLACK_BOT_TOKEN:-}"
+SLACK_CHANNEL_ID="C0A5JPHFEE6"
+
 # Screen resolution: 1080x2392
 # Button coordinates
 GUEST_BUTTON_X=540      # Center X
@@ -31,6 +35,11 @@ REFERENCE_COLOR_1="255,255,247"
 REFERENCE_COLOR_2="255,255,245"
 # Check 3: (1044, 968)
 REFERENCE_COLOR_3="255,253,235"
+# Check 4: (1044, 1176)
+REFERENCE_COLOR_4="255,250,205"
+
+# Color at (98, 2260) to detect if re-click is needed (from image.png)
+DUPLICATE_CHECK_COLOR="255,253,253"
 
 # Maximum popups to try (safety limit)
 MAX_POPUPS=15
@@ -181,7 +190,11 @@ compare_colors() {
     fi
 }
 
+# Variable to store last screenshot path
+LAST_SCREENSHOT_PATH=""
+
 # Function to take a screenshot with a descriptive name
+# Also stores the path in LAST_SCREENSHOT_PATH
 take_screenshot() {
     local description="$1"
     local timestamp=$(date +"%Y%m%d_%H%M%S")
@@ -199,6 +212,7 @@ take_screenshot() {
         if [ $? -eq 0 ]; then
             adb -s "$DEVICE_IP" shell rm "$device_path"
             log_success "Screenshot saved: $filename"
+            LAST_SCREENSHOT_PATH="$local_path"
             ((screenshot_num++))
             return 0
         else
@@ -208,6 +222,64 @@ take_screenshot() {
     else
         log_error "Failed to capture screenshot on device"
         return 1
+    fi
+}
+
+# Function to compare two screenshots by checking specific pixel colors
+# Returns 0 if screenshots are similar (duplicate), 1 if different
+compare_screenshots() {
+    local file1="$1"
+    local file2="$2"
+    
+    if [ ! -f "$file1" ] || [ ! -f "$file2" ]; then
+        return 1  # Files don't exist, consider different
+    fi
+    
+    # Compare multiple pixels to determine similarity
+    local match_count=0
+    local check_points=("540,600" "540,800" "540,1000" "540,1200")
+    
+    for point in "${check_points[@]}"; do
+        local x=$(echo "$point" | cut -d',' -f1)
+        local y=$(echo "$point" | cut -d',' -f2)
+        
+        # Get color from file1
+        local color1=$(python3 << EOF
+import subprocess
+subprocess.run('sips -c 1 1 --cropOffset $y $x "$file1" -s format bmp -o /tmp/p1.bmp 2>/dev/null', shell=True, capture_output=True)
+try:
+    with open('/tmp/p1.bmp', 'rb') as f:
+        data = f.read()
+        print(f"{data[-3]},{data[-2]},{data[-1]}")
+except:
+    print("0,0,0")
+EOF
+)
+        
+        # Get color from file2
+        local color2=$(python3 << EOF
+import subprocess
+subprocess.run('sips -c 1 1 --cropOffset $y $x "$file2" -s format bmp -o /tmp/p2.bmp 2>/dev/null', shell=True, capture_output=True)
+try:
+    with open('/tmp/p2.bmp', 'rb') as f:
+        data = f.read()
+        print(f"{data[-3]},{data[-2]},{data[-1]}")
+except:
+    print("0,0,0")
+EOF
+)
+        
+        # Compare colors with tolerance
+        if [ "$color1" = "$color2" ]; then
+            ((match_count++))
+        fi
+    done
+    
+    # If 3 or more points match, consider it a duplicate
+    if [ $match_count -ge 3 ]; then
+        return 0  # Similar/duplicate
+    else
+        return 1  # Different
     fi
 }
 
@@ -411,12 +483,29 @@ run_game_flow() {
     if compare_colors "$current_color" "$REFERENCE_COLOR_1"; then
         log_success "Color matches! Clicking at (1044, 587)..."
         tap_screen 1044 587 "Matched button"
-        sleep 3
+        sleep 8
         take_screenshot "after_1044_587_click"
         
-        log_info "Clicking at (120, 2250)..."
-        tap_screen 120 2250 "Button"
-        sleep 3
+        log_info "Clicking comeback at (120, 2250)..."
+        tap_screen 120 2250 "Comeback button"
+        sleep 4
+        
+        # Check if re-click is needed by checking color at (98, 2260)
+        local check_color=$(get_pixel_color 98 2260)
+        log_info "Checking duplicate at (98, 2260): RGB($check_color) vs RGB($DUPLICATE_CHECK_COLOR)"
+        
+        if compare_colors "$check_color" "$DUPLICATE_CHECK_COLOR"; then
+            log_warning "Re-click needed! Waiting 6 seconds..."
+            sleep 6
+            
+            log_info "Re-clicking at (1044, 587)..."
+            tap_screen 1044 587 "Re-click button"
+            sleep 4
+            
+            log_info "Clicking comeback at (120, 2250)..."
+            tap_screen 120 2250 "Comeback button"
+            sleep 4
+        fi
     else
         log_warning "Color does not match, skipping click"
     fi
@@ -432,20 +521,37 @@ run_game_flow() {
     if compare_colors "$current_color" "$REFERENCE_COLOR_2"; then
         log_success "Color matches! Clicking at (1044, 783)..."
         tap_screen 1044 783 "Matched button"
-        sleep 6
+        sleep 8
         take_screenshot "after_1044_783_click"
         
-        log_info "Clicking at (120, 2250)..."
-        tap_screen 120 2250 "Button"
+        log_info "Clicking comeback at (120, 2250)..."
+        tap_screen 120 2250 "Comeback button"
+        sleep 4
+        
+        # Check if re-click is needed by checking color at (98, 2260)
+        local check_color=$(get_pixel_color 98 2260)
+        log_info "Checking duplicate at (98, 2260): RGB($check_color) vs RGB($DUPLICATE_CHECK_COLOR)"
+        
+        if compare_colors "$check_color" "$DUPLICATE_CHECK_COLOR"; then
+            log_warning "Re-click needed! Waiting 6 seconds..."
+            sleep 6
+            
+            log_info "Re-clicking at (1044, 783)..."
+            tap_screen 1044 783 "Re-click button"
+            sleep 4
+            
+            log_info "Clicking comeback at (120, 2250)..."
+            tap_screen 120 2250 "Comeback button"
+            sleep 4
+        fi
     else
         log_warning "Color does not match, skipping click"
     fi
     
     # ============================================
-    # STEP 13: Wait 2s, check color at (1044, 968) and click if matches
+    # STEP 13: Check color at (1044, 968) and click if matches
     # ============================================
     echo ""
-    sleep 2
     log_info "Checking color at (1044, 968)..."
     current_color=$(get_pixel_color 1044 968)
     log_info "Current color: RGB($current_color) vs Reference: RGB($REFERENCE_COLOR_3)"
@@ -453,17 +559,73 @@ run_game_flow() {
     if compare_colors "$current_color" "$REFERENCE_COLOR_3"; then
         log_success "Color matches! Clicking at (1044, 968)..."
         tap_screen 1044 968 "Matched button"
-        sleep 1
+        sleep 8
         take_screenshot "after_1044_968_click"
         
-        log_info "Clicking at (120, 2250)..."
-        tap_screen 120 2250 "Button"
+        log_info "Clicking comeback at (120, 2250)..."
+        tap_screen 120 2250 "Comeback button"
+        sleep 4
+        
+        # Check if re-click is needed by checking color at (98, 2260)
+        local check_color=$(get_pixel_color 98 2260)
+        log_info "Checking duplicate at (98, 2260): RGB($check_color) vs RGB($DUPLICATE_CHECK_COLOR)"
+        
+        if compare_colors "$check_color" "$DUPLICATE_CHECK_COLOR"; then
+            log_warning "Re-click needed! Waiting 6 seconds..."
+            sleep 6
+            
+            log_info "Re-clicking at (1044, 968)..."
+            tap_screen 1044 968 "Re-click button"
+            sleep 4
+            
+            log_info "Clicking comeback at (120, 2250)..."
+            tap_screen 120 2250 "Comeback button"
+            sleep 4
+        fi
     else
         log_warning "Color does not match, skipping click"
     fi
     
     # ============================================
-    # STEP 14: Click at (530, 400), wait, screenshot, then close popup
+    # STEP 14: Check color at (1044, 1176) and click if matches
+    # ============================================
+    echo ""
+    log_info "Checking color at (1044, 1176)..."
+    current_color=$(get_pixel_color 1044 1176)
+    log_info "Current color: RGB($current_color) vs Reference: RGB($REFERENCE_COLOR_4)"
+    
+    if compare_colors "$current_color" "$REFERENCE_COLOR_4"; then
+        log_success "Color matches! Clicking at (1044, 1176)..."
+        tap_screen 1044 1176 "Matched button"
+        sleep 8
+        take_screenshot "after_1044_1176_click"
+        
+        log_info "Clicking comeback at (120, 2250)..."
+        tap_screen 120 2250 "Comeback button"
+        sleep 4
+        
+        # Check if re-click is needed by checking color at (98, 2260)
+        local check_color=$(get_pixel_color 98 2260)
+        log_info "Checking duplicate at (98, 2260): RGB($check_color) vs RGB($DUPLICATE_CHECK_COLOR)"
+        
+        if compare_colors "$check_color" "$DUPLICATE_CHECK_COLOR"; then
+            log_warning "Re-click needed! Waiting 6 seconds..."
+            sleep 6
+            
+            log_info "Re-clicking at (1044, 1176)..."
+            tap_screen 1044 1176 "Re-click button"
+            sleep 4
+            
+            log_info "Clicking comeback at (120, 2250)..."
+            tap_screen 120 2250 "Comeback button"
+            sleep 4
+        fi
+    else
+        log_warning "Color does not match, skipping click"
+    fi
+    
+    # ============================================
+    # STEP 15: Click at (530, 400), wait, screenshot, then close popup
     # ============================================
     echo ""
     log_info "Clicking at (530, 400)..."
@@ -480,6 +642,156 @@ run_game_flow() {
     log_info "Popups closed: $popups_closed"
     log_info "Total screenshots taken: $((screenshot_num - 1))"
     log_info "Screenshots saved to: $SCREENSHOT_DIR"
+    echo "=========================================="
+    
+    # ============================================
+    # Upload screenshots to Slack
+    # ============================================
+    echo ""
+    log_info "Uploading screenshots to Slack..."
+    
+    # Get current date for the run
+    local run_date=$(date +"%Y-%m-%d %H:%M")
+    
+    # Find all screenshots from this run (today's date)
+    local today=$(date +"%Y%m%d")
+    local uploaded=0
+    local total_files=0
+    local batch_count=0
+    local BATCH_SIZE=5
+    
+    # Clean up any previous batch file
+    rm -f /tmp/slack_batch.txt
+    
+    # Count total files first
+    for screenshot in $(ls -1 "$SCREENSHOT_DIR"/*.png 2>/dev/null | grep "$today" | sort); do
+        ((total_files++))
+    done
+    
+    log_info "Found $total_files screenshots to upload (batching $BATCH_SIZE at a time)"
+    
+    # Send summary message first
+    curl -s -X POST "https://slack.com/api/chat.postMessage" \
+        -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+        -H "Content-Type: application/json; charset=utf-8" \
+        -d "{\"channel\": \"$SLACK_CHANNEL_ID\", \"text\": \"📱 Fish of Fortune Screenshot Run Complete - $run_date - Screenshots: $total_files\"}" > /dev/null
+    
+    # Upload files in batches of 5
+    for screenshot in $(ls -1 "$SCREENSHOT_DIR"/*.png 2>/dev/null | grep "$today" | sort); do
+        local filename=$(basename "$screenshot")
+        local filesize=$(stat -f%z "$screenshot")
+        log_info "Uploading: $filename"
+        
+        # Step 1: Get upload URL
+        local upload_response=$(curl -s -X POST "https://slack.com/api/files.getUploadURLExternal" \
+            -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "filename=$filename&length=$filesize")
+        
+        local upload_url=$(echo "$upload_response" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('upload_url',''))" 2>/dev/null)
+        local file_id=$(echo "$upload_response" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('file_id',''))" 2>/dev/null)
+        
+        if [ -z "$upload_url" ] || [ -z "$file_id" ]; then
+            log_error "Failed to get upload URL for: $filename"
+            continue
+        fi
+        
+        # Step 2: Upload the file to the URL
+        curl -s -X POST "$upload_url" -F "file=@$screenshot" > /dev/null
+        
+        # Add to batch - write to temp file
+        echo "$file_id|$filename" >> /tmp/slack_batch.txt
+        ((batch_count++))
+        ((uploaded++))
+        
+        # Complete batch when we reach BATCH_SIZE or last file
+        if [ $batch_count -ge $BATCH_SIZE ] || [ $uploaded -eq $total_files ]; then
+            log_info "Sharing batch of $batch_count files..."
+            
+            # Use Python to read temp file and send batch
+            python3 -c "
+import json
+import urllib.request
+
+files = []
+with open('/tmp/slack_batch.txt', 'r') as f:
+    for line in f:
+        parts = line.strip().split('|')
+        if len(parts) == 2:
+            files.append({'id': parts[0], 'title': parts[1]})
+
+if files:
+    data = {'files': files, 'channel_id': '$SLACK_CHANNEL_ID'}
+    req = urllib.request.Request(
+        'https://slack.com/api/files.completeUploadExternal',
+        data=json.dumps(data).encode('utf-8'),
+        headers={
+            'Authorization': 'Bearer $SLACK_BOT_TOKEN',
+            'Content-Type': 'application/json; charset=utf-8'
+        }
+    )
+    try:
+        with urllib.request.urlopen(req) as response:
+            result = json.loads(response.read().decode('utf-8'))
+            print('OK' if result.get('ok') else 'FAIL: ' + result.get('error', 'unknown'))
+    except Exception as e:
+        print('ERROR: ' + str(e))
+"
+            
+            log_success "Batch shared! $uploaded of $total_files"
+            
+            # Reset batch
+            rm -f /tmp/slack_batch.txt
+            batch_count=0
+        fi
+    done
+    
+    echo ""
+    log_success "Uploaded $uploaded screenshots to Slack #screenshots"
+    echo "=========================================="
+    
+    # ============================================
+    # Close the app on the device and remove from recents
+    # ============================================
+    echo ""
+    log_info "Closing Fish of Fortune app..."
+    
+    # Force stop the app
+    adb -s "$DEVICE_IP" shell am force-stop "$PACKAGE_NAME"
+    
+    # Go to Home screen
+    adb -s "$DEVICE_IP" shell input keyevent KEYCODE_HOME
+    sleep 0.5
+    
+    # Open recent apps and clear all (swipe to dismiss)
+    adb -s "$DEVICE_IP" shell input keyevent KEYCODE_APP_SWITCH
+    sleep 0.5
+    
+    # Clear all recent apps (tap "Clear all" button - usually at center top or swipe up)
+    adb -s "$DEVICE_IP" shell input swipe 540 1000 540 200 200
+    sleep 0.5
+    
+    # Go back to home
+    adb -s "$DEVICE_IP" shell input keyevent KEYCODE_HOME
+    sleep 0.5
+    
+    # Turn off the screen
+    log_info "Turning off screen..."
+    adb -s "$DEVICE_IP" shell input keyevent KEYCODE_POWER
+    
+    log_success "App closed, removed from recents, and screen turned off!"
+    
+    # ============================================
+    # Delete screenshots from computer
+    # ============================================
+    echo ""
+    log_info "Cleaning up screenshots from computer..."
+    local deleted=0
+    for screenshot in $(ls -1 "$SCREENSHOT_DIR"/*.png 2>/dev/null | grep "$today" | sort); do
+        rm -f "$screenshot"
+        ((deleted++))
+    done
+    log_success "Deleted $deleted screenshots from $SCREENSHOT_DIR"
     echo "=========================================="
 }
 
