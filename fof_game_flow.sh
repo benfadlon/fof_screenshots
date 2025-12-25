@@ -11,7 +11,7 @@ SCREENSHOT_DIR="/Users/user/Desktop/fof_screenshots"
 
 # Slack Configuration (set SLACK_BOT_TOKEN environment variable)
 SLACK_BOT_TOKEN="${SLACK_BOT_TOKEN:-}"
-SLACK_CHANNEL_ID="C0A5JPHFEE6"
+SLACK_CHANNEL_ID="C0A5403G17H"
 
 # Screen resolution: 1080x2392
 # Button coordinates
