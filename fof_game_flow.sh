@@ -408,6 +408,7 @@ run_game_flow() {
         log_success "Color matches! Clicking at (582, 2280)..."
         tap_screen 582 2280 "Pre-popup button"
         sleep 1
+        take_screenshot "after_pre_popup_click"
     else
         log_warning "Color does not match, skipping pre-popup click"
     fi
@@ -426,8 +427,14 @@ run_game_flow() {
         # Click X button
         tap_screen $POPUP_X_BUTTON_X $POPUP_X_BUTTON_Y "Popup X button"
         
+        # Immediately click second X button position
+        adb -s "$DEVICE_IP" shell input tap 1066 330
+        
+        # Immediately click third position
+        adb -s "$DEVICE_IP" shell input tap 500 2200
+        
         # Wait for popup to close
-        sleep 1
+        sleep 1.5
         
         # Take screenshot
         take_screenshot "after_popup_${i}_closed"
