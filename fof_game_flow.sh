@@ -41,6 +41,9 @@ REFERENCE_COLOR_4="255,250,205"
 # Color at (98, 2260) to detect if re-click is needed (from image.png)
 DUPLICATE_CHECK_COLOR="255,253,253"
 
+# Pre-popup check: Color at (320, 420) from game_main_screen
+PRE_POPUP_CHECK_COLOR="255,253,47"
+
 # Maximum popups to try (safety limit)
 MAX_POPUPS=15
 
@@ -392,6 +395,22 @@ run_game_flow() {
     log_info "Waiting 9 seconds..."
     sleep 9
     take_screenshot "game_main_screen"
+    
+    # ============================================
+    # STEP 4.5: Check pixel at (320, 420) - if matches, click button
+    # ============================================
+    echo ""
+    log_info "Checking pixel at (320, 420) for pre-popup action..."
+    local pre_popup_color=$(get_pixel_color 320 420)
+    log_info "Current color: RGB($pre_popup_color) vs Reference: RGB($PRE_POPUP_CHECK_COLOR)"
+    
+    if compare_colors "$pre_popup_color" "$PRE_POPUP_CHECK_COLOR"; then
+        log_success "Color matches! Clicking at (582, 2280)..."
+        tap_screen 582 2280 "Pre-popup button"
+        sleep 1
+    else
+        log_warning "Color does not match, skipping pre-popup click"
+    fi
     
     # ============================================
     # STEP 5: Close popups (auto-detect when done)
