@@ -5,13 +5,13 @@
 # Auto-detects when popups are finished by checking pixel color!
 
 # Configuration
-DEVICE_IP="10.10.0.114:5555"
+DEVICE_IP="192.168.7.138:5555"
 PACKAGE_NAME="com.whalo.games.fishoffortune"
 SCREENSHOT_DIR="/Users/user/Desktop/fof_screenshots"
 
 # Slack Configuration (set SLACK_BOT_TOKEN environment variable)
 SLACK_BOT_TOKEN="${SLACK_BOT_TOKEN:-}"
-SLACK_CHANNEL_ID="C0A5403G17H"
+SLACK_CHANNEL_ID="C0A5JPHFEE6"
 
 # Screen resolution: 1080x2392
 # Button coordinates
