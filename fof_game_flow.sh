@@ -7,6 +7,7 @@
 # Configuration
 DEVICE_IP="192.168.7.138:5555"
 SCREENSHOT_DIR="/Users/user/Desktop/fof_screenshots"
+PACKAGE_NAME="com.whalo.games.fishoffortune"
 
 # Slack Configuration (set SLACK_BOT_TOKEN environment variable)
 SLACK_BOT_TOKEN="${SLACK_BOT_TOKEN:-}"
