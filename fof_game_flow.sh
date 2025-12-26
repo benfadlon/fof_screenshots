@@ -11,7 +11,7 @@ SCREENSHOT_DIR="/Users/user/Desktop/fof_screenshots"
 
 # Slack Configuration (set SLACK_BOT_TOKEN environment variable)
 SLACK_BOT_TOKEN="${SLACK_BOT_TOKEN:-}"
-SLACK_CHANNEL_ID="C0A5JPHFEE6"
+SLACK_CHANNEL_ID="C0A5403G17H"
 
 # Screen resolution: 1080x2392
 # Button coordinates
@@ -434,7 +434,7 @@ run_game_flow() {
         adb -s "$DEVICE_IP" shell input tap 500 2200
         
         # Wait for popup to close
-        sleep 1.5
+        sleep 2
         
         # Take screenshot
         take_screenshot "after_popup_${i}_closed"
