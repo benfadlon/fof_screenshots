@@ -5,7 +5,7 @@
 # Auto-detects when popups are finished by checking pixel color!
 
 # Configuration
-DEVICE_IP="10.10.0.37:5555"
+DEVICE_IP="00169154P000848"
 SCREENSHOT_DIR="/Users/user/Desktop/fof_screenshots"
 PACKAGE_NAME="com.whalo.games.fishoffortune"
 
